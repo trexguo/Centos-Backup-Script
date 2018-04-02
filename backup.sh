@@ -2,11 +2,6 @@
 # --------------------------------------------------------
 # Centos-Server-Backup-Script.
 #
-#
-# by RaveMaker & ET 
-# http://ravemaker.net 
-# http://etcs.me
-#
 # this script backup important files from your system:
 # system files, db files, user files, services, etc.,
 # and create .tgz in a backup folder for each backup session.
@@ -21,12 +16,6 @@ function checkLists {
 }
 
 function checkBackupStatus {
-    if $BACKUP_DAILY_ONLY_ONCE ; then
-        if [ -f $backupdir/0/$filename ] ; then
-            echo "Backup already exist - try again tomorrow."
-            exit;
-        fi;
-    fi;
     if [ -d $tempdir ] ; then
         echo ""
         echo "Backup is already running. remove temp folder to reset."
@@ -93,7 +82,7 @@ function dumpSQL {
 
 function createBackup {
     echo "Creating TGZ Backup file for..";
-    echo "directories:"
+    echo "  Directories:"
     cat $backuplistfile | while read line
     do
         for d in $line; do
@@ -101,15 +90,16 @@ function createBackup {
     	    # take target directory to backup and replace / with _ for backup filename
     	    target_backup_file=$tempdir/${d//[\/]/_}$filename
     	    if $WRITE_CHANGES ; then
-        	tar zcfP $target_backup_file $d > $workdir/log/$filename
+        	tar zcfP $target_backup_file $d > $workdir/log/${d//[\/]/_}$filename.log
     	    fi;
             done
             break
         done
+}
+
+function createDbBackup {
     echo "databases"
-    if $WRITE_CHANGES ; then
-        tar zcfP $tempdir/db.$filename $tempdir/*.sql > $workdir/log/db.$filename
-    fi;
+    tar zcfP $tempdir/db.$filename $tempdir/*.sql > $workdir/log/db.$filename.log
 }
 
 function moveBackup {
@@ -149,10 +139,16 @@ function startBackup {
         deleteOldestBackup $BACKUP_COPIES
         # step 2: shift the middle snapshots(s) back by one, if they exist
         shiftBackups
-        # step 3: dump sql dbs
-        dumpSQL
-        # step 4: create new backup
         createBackup
+        if $WRITE_CHANGES && $BACKUP_MYSQL ; then
+            echo "Starting MySQL Backup..."
+            # step 3: dump sql dbs
+            dumpSQL
+            # step 4: create new backup
+            createDbBackup
+        else
+            echo "Do not backup MySQL..."
+        fi;
         # step 5: move to location 0
         moveBackup
         # step 6: clear temp for the next run
@@ -161,17 +157,20 @@ function startBackup {
 }
 
 # Intro
-echo "Copyright(c) 2013 Backup script. - by Ravemaker & ET"
+echo "================================================="
+echo "| Copyright(c) 2018 Backup script. - by Trexguo |"
 # Load settings
 SCRIPTDIRECTORY=$(cd `dirname $0` && pwd)
 cd $SCRIPTDIRECTORY
 if [ -f settings.cfg ] ; then
-    echo "Loading settings..."
+    echo "| Loading settings...                           |"
     source settings.cfg
 else
-    echo "ERROR: Create settings.cfg (from settings.cfg.example)"
+    echo "| ERROR: Create settings.cfg (from settings.cfg.example)"
     exit
 fi;
+echo "================================================="
+
 # Start backup
 startBackup
 # Final
